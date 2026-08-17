@@ -1,0 +1,131 @@
+# Spanish — the Michel Thomas way
+
+A speaking-first Spanish course that runs in the browser. No accounts, no build
+step, no network. Open `index.html` and start talking.
+
+## What makes it "Michel Thomas"
+
+The method is not flashcards with a Spanish coat of paint. Four things define
+it, and the app is built around them:
+
+**You never memorise.** Each lesson hands you a few building blocks — a
+cognate pattern, a verb form, a connector — and then immediately makes you
+build sentences out of them. Retention is a side effect of construction.
+
+**You produce before you look.** Every prompt is English, and the Spanish stays
+hidden until you ask for it. The pause where you work it out is the part that
+teaches; the app never rushes it and never runs a timer.
+
+**Nothing is dropped.** A missed sentence reappears a few prompts later in the
+same session, then again the next day, then a week out. Remembering to revise
+is the app's job, not yours.
+
+**Everything accumulates.** Lesson 5 does not drill lesson 5 in isolation — it
+weaves in whatever is due from lessons 1 to 4, so old material keeps getting
+re-earned in new company.
+
+## Conversations
+
+Every lesson ends in a real exchange, and this is the point of the whole thing.
+The other speaker talks; you have to answer. Crucially, each conversation is
+built **only** from material already taught, so from lesson one you are holding
+up your end of a genuine dialogue rather than reciting drills.
+
+The final lesson is about conversational survival specifically — asking someone
+to slow down, saying you did not understand, buying yourself a second with
+*bueno...*, and asking what a word means. That is the skill that decides whether
+you actually speak to anyone.
+
+## Running it
+
+Open `index.html` in a browser. That is the whole install.
+
+If your browser is strict about local files, serve the directory:
+
+```
+python3 -m http.server 8000    # then open http://localhost:8000
+```
+
+**Audio.** Speech is not optional garnish here — you need to hear the Spanish.
+The app uses the browser's built-in speech synthesis and picks a Spanish voice
+automatically. If none is installed it says so; add one in your OS voice
+settings. Pace is adjustable and starts deliberately unhurried.
+
+**Speaking your answers.** In Chrome and Edge you can press *Say it* and answer
+out loud — the app listens, checks what it heard, and grades it. Everywhere
+else, say it out loud anyway and mark yourself honestly. Typing is available in
+Settings for anyone who wants it, but it is off by default on purpose.
+
+## Keyboard
+
+The screen should not need your hands or your eyes while you answer.
+
+| Key | Does |
+| --- | --- |
+| `Space` | Show the answer · advance the conversation |
+| `1` `2` `3` | Got it · Nearly · Missed |
+| `R` | Hear it again |
+| `Esc` | Back to the course |
+
+## How grading works
+
+Three self-marks, because only you know whether you actually produced it:
+
+- **Got it** — promotes the item; it comes back later and later.
+- **Nearly** — you produced it but not cleanly; it holds its place.
+- **Missed** — back to the start of the queue and again in this session.
+
+If you type or speak your answer the app pre-judges it for you (accents and
+punctuation are never penalised), but its verdict is a second opinion. Yours
+decides.
+
+The percentage on each lesson is *strength*, not coverage: one clean pass
+through an item is worth a third of it. Reaching 100% means recalling the
+material correctly on separate days, which is the only kind of knowing that
+counts.
+
+## Layout
+
+```
+index.html            page shell and script order
+data/curriculum.js    the course: blocks, drill items, conversations
+js/engine.js          answer checking, Leitner scheduling, session building
+js/speech.js          text-to-speech and optional speech recognition
+js/storage.js         progress in localStorage
+js/app.js             screens, drill loop, conversation loop, keyboard
+css/styles.css        light and dark
+```
+
+## Extending the course
+
+Add a lesson to `data/curriculum.js`. One rule governs everything: **never use a
+word in an item or a conversation that no earlier block has introduced.** The
+whole method rests on the learner never meeting an unexplained element, and
+that guarantee is only as good as the newest lesson.
+
+```js
+{
+  id: 'l9',
+  title: 'Something new',
+  subtitle: 'the short version',
+  goal: 'What the learner can do afterwards.',
+  blocks: [{ rule: 'the pattern', ex: 'example → ejemplo' }],
+  items: [
+    { en: 'English prompt.', es: 'Respuesta.', alt: ['Otra respuesta.'], note: 'shown only after the reveal' }
+  ],
+  conversations: [{
+    id: 'c9a',
+    title: 'Scene',
+    setting: 'One line of context.',
+    turns: [
+      { who: 'them', es: '¿Qué tal?', en: 'How are things?' },
+      { who: 'you',  cue: 'Say: Very well, thank you.', es: 'Muy bien, gracias.' }
+    ]
+  }]
+}
+```
+
+Use `alt` wherever Spanish genuinely allows more than one answer — a climbing
+object pronoun (`quiero comprarlo` / `lo quiero comprar`) or a feminine
+agreement (`cansado` / `cansada`). Marking a learner wrong for correct Spanish
+is the fastest way to lose them.

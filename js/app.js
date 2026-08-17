@@ -1,0 +1,658 @@
+/* View controller.
+ *
+ * Three screens matter: the course map, the drill, and the conversation.
+ * Everything is keyboard-first, because the learner's hands should be free
+ * and their eyes should be off the screen while they answer.
+ */
+(function (MT) {
+  'use strict';
+
+  var app = document.getElementById('app');
+  var course = MT.curriculum;
+  var view = { name: 'home' };
+  var session = null;
+
+  /* ---------- helpers ---------- */
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function (k) {
+      if (k === 'class') node.className = attrs[k];
+      else if (k === 'html') node.innerHTML = attrs[k];
+      else if (k === 'text') node.textContent = attrs[k];
+      else if (k.slice(0, 2) === 'on') node.addEventListener(k.slice(2), attrs[k]);
+      else if (attrs[k] != null && attrs[k] !== false) node.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) {
+      if (c == null) return;
+      node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    });
+    return node;
+  }
+
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  function lessonById(id) {
+    return course.filter(function (l) { return l.id === id; })[0];
+  }
+
+  function go(next) {
+    MT.speech.stop();
+    MT.speech.stopListening();
+    view = next;
+    render();
+  }
+
+  /* ---------- home ---------- */
+
+  function renderHome() {
+    var due = MT.engine.countDue(course);
+    var totals = MT.store.state.totals;
+    var streak = MT.store.state.streak.count;
+
+    var header = el('header', { class: 'hero' }, [
+      el('p', { class: 'eyebrow', text: 'Spanish · the Michel Thomas way' }),
+      el('h1', { text: 'You are not going to memorise anything.' }),
+      el('p', { class: 'lede', text: 'Listen, then say it out loud before you look. Nothing to write down, nothing to revise. If you forget something it will come back to you on its own — that is the app’s job, not yours.' })
+    ]);
+
+    var stats = el('div', { class: 'stats' }, [
+      stat(streak, streak === 1 ? 'day in a row' : 'days in a row'),
+      stat(totals.answered, 'sentences produced'),
+      stat(due, due === 1 ? 'item due' : 'items due')
+    ]);
+
+    var actions = el('div', { class: 'row' }, [
+      due > 0 ? el('button', {
+        class: 'btn btn-primary',
+        onclick: function () { startReview(); }
+      }, ['Review what is due (' + due + ')']) : null,
+      el('button', {
+        class: due > 0 ? 'btn' : 'btn btn-primary',
+        onclick: function () { startNextLesson(); }
+      }, [nextLessonLabel()])
+    ]);
+
+    var list = el('ol', { class: 'lessons' }, course.map(function (lesson, i) {
+      return lessonCard(lesson, i);
+    }));
+
+    var main = el('main', { class: 'wrap' }, [
+      header, stats, actions,
+      el('h2', { class: 'section', text: 'The course' }),
+      list,
+      renderSettings()
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+  }
+
+  function stat(value, label) {
+    return el('div', { class: 'stat' }, [
+      el('strong', { text: String(value) }),
+      el('span', { text: label })
+    ]);
+  }
+
+  function nextLessonLabel() {
+    var lesson = nextLesson();
+    var idx = course.indexOf(lesson) + 1;
+    var p = MT.engine.lessonProgress(lesson);
+    return (p.seen === 0 ? 'Start lesson ' : 'Continue lesson ') + idx;
+  }
+
+  function startNextLesson() {
+    go({ name: 'blocks', lessonId: nextLesson().id });
+  }
+
+  // Move on once the material has been covered, not once it is perfect —
+  // the spacing schedule keeps bringing the shaky items back regardless.
+  function nextLesson() {
+    for (var i = 0; i < course.length; i++) {
+      var p = MT.engine.lessonProgress(course[i]);
+      if (p.covered < Math.ceil(p.total * 0.8)) return course[i];
+    }
+    return course[course.length - 1];
+  }
+
+  function lessonCard(lesson, i) {
+    var p = MT.engine.lessonProgress(lesson);
+    var pct = p.pct;
+
+    var convButtons = lesson.conversations.map(function (c) {
+      var done = !!MT.store.state.conversationsDone[c.id];
+      return el('button', {
+        class: 'chip' + (done ? ' chip-done' : ''),
+        onclick: function (e) { e.stopPropagation(); go({ name: 'conversation', lessonId: lesson.id, convId: c.id }); }
+      }, [(done ? '✓ ' : '▶ ') + c.title]);
+    });
+
+    return el('li', { class: 'lesson' + (p.seen ? ' lesson-touched' : '') }, [
+      el('div', { class: 'lesson-head' }, [
+        el('span', { class: 'lesson-num', text: String(i + 1) }),
+        el('div', { class: 'lesson-title' }, [
+          el('h3', { text: lesson.title }),
+          el('p', { class: 'muted', text: lesson.subtitle })
+        ]),
+        el('span', { class: 'lesson-pct', text: pct + '%' })
+      ]),
+      el('p', { class: 'goal', text: lesson.goal }),
+      el('div', { class: 'bar' }, [el('div', { class: 'bar-fill', style: 'width:' + pct + '%' })]),
+      el('div', { class: 'row row-tight' }, [
+        el('button', {
+          class: 'btn btn-small',
+          onclick: function () { go({ name: 'blocks', lessonId: lesson.id }); }
+        }, [p.seen ? 'Practise' : 'Begin'])
+      ].concat(convButtons))
+    ]);
+  }
+
+  /* ---------- settings ---------- */
+
+  function renderSettings() {
+    var s = MT.store.settings;
+    var voices = MT.speech.spanishVoices();
+
+    var voiceSelect = el('select', {
+      class: 'input',
+      onchange: function (e) { MT.store.set('voice', e.target.value); MT.speech.speak('Perfecto.'); }
+    }, [el('option', { value: '', text: 'Automatic' })].concat(
+      voices.map(function (v) {
+        return el('option', { value: v.name, text: v.name + ' (' + v.lang + ')', selected: s.voice === v.name });
+      })
+    ));
+
+    var rateInput = el('input', {
+      type: 'range', min: '0.5', max: '1.2', step: '0.05', value: String(s.rate), class: 'range',
+      oninput: function (e) {
+        MT.store.set('rate', parseFloat(e.target.value));
+        e.target.nextSibling.textContent = parseFloat(e.target.value).toFixed(2) + '×';
+      },
+      onchange: function () { MT.speech.speak('No es difícil, es fácil.'); }
+    });
+
+    var warn = null;
+    if (!MT.speech.supported) {
+      warn = el('p', { class: 'warn', text: 'This browser has no speech synthesis, so the app cannot read the Spanish to you. Chrome, Edge or Safari will.' });
+    } else if (!MT.speech.hasSpanishVoice()) {
+      warn = el('p', { class: 'warn', text: 'No Spanish voice is installed on this system. Audio will fall back to whatever voice exists, which will sound wrong. Install a Spanish voice in your OS settings.' });
+    }
+
+    return el('details', { class: 'settings' }, [
+      el('summary', { text: 'Settings' }),
+      warn,
+      el('div', { class: 'setting' }, [
+        el('label', { text: 'Spanish voice' }), voiceSelect
+      ]),
+      el('div', { class: 'setting' }, [
+        el('label', { text: 'Speaking pace' }),
+        el('div', { class: 'range-row' }, [rateInput, el('span', { class: 'range-val', text: s.rate.toFixed(2) + '×' })])
+      ]),
+      toggle('Type your answers as well as saying them', 'typed'),
+      toggle('Speak the answer automatically on reveal', 'autoPlay'),
+      toggle('Show English under the other speaker in conversations', 'showEnglish'),
+      el('div', { class: 'setting' }, [
+        el('button', {
+          class: 'btn btn-quiet',
+          onclick: function () {
+            if (confirm('Erase all progress and start the course again?')) { MT.store.reset(); render(); }
+          }
+        }, ['Reset all progress'])
+      ])
+    ]);
+  }
+
+  function toggle(label, name) {
+    return el('label', { class: 'setting setting-toggle' }, [
+      el('input', {
+        type: 'checkbox', checked: !!MT.store.settings[name],
+        onchange: function (e) { MT.store.set(name, e.target.checked); }
+      }),
+      el('span', { text: label })
+    ]);
+  }
+
+  /* ---------- building blocks ---------- */
+
+  function renderBlocks() {
+    var lesson = lessonById(view.lessonId);
+    MT.store.markLessonStarted(lesson.id);
+
+    var main = el('main', { class: 'wrap narrow' }, [
+      backBar(lesson.title),
+      el('h1', { class: 'screen-title', text: lesson.title }),
+      el('p', { class: 'lede', text: lesson.goal }),
+      el('h2', { class: 'section', text: 'What you are about to be given' }),
+      el('ul', { class: 'blocks' }, lesson.blocks.map(function (b) {
+        return el('li', { class: 'block' }, [
+          el('p', { class: 'block-rule', text: b.rule }),
+          b.ex ? el('p', { class: 'block-ex', text: b.ex }) : null,
+          b.ex ? el('button', {
+            class: 'btn btn-icon', title: 'Hear it',
+            onclick: function () { MT.speech.speak(spanishOnly(b.ex)); }
+          }, ['♪']) : null
+        ]);
+      })),
+      el('p', { class: 'muted', text: 'Read these once. Do not try to hold on to them — you are about to use them, and using them is what makes them stick.' }),
+      el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-primary', onclick: function () { startLesson(lesson); } }, ['Start speaking →'])
+      ])
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+  }
+
+  // Pull the Spanish half out of an example line like "possible → posible".
+  function spanishOnly(ex) {
+    return ex.split('·').map(function (part) {
+      var halves = part.split(/→|—|-{1,2}\s/);
+      return (halves.length > 1 ? halves[1] : halves[0]).trim();
+    }).join(', ');
+  }
+
+  function backBar(label) {
+    return el('div', { class: 'topbar' }, [
+      el('button', { class: 'btn btn-quiet', onclick: function () { go({ name: 'home' }); } }, ['← Course']),
+      el('span', { class: 'topbar-label', text: label || '' })
+    ]);
+  }
+
+  /* ---------- drill ---------- */
+
+  function startLesson(lesson) {
+    var queue = MT.engine.buildLessonQueue(lesson, course, { maxReview: 8 });
+    session = { queue: queue, pos: 0, revealed: false, title: lesson.title, kind: 'lesson', heard: '', verdict: null, right: 0, listening: false };
+    go({ name: 'drill', lessonId: lesson.id });
+  }
+
+  function startReview() {
+    var queue = MT.engine.buildReviewQueue(course, 30);
+    if (!queue.length) return;
+    session = { queue: queue, pos: 0, revealed: false, title: 'Review', kind: 'review', heard: '', verdict: null, right: 0, listening: false };
+    go({ name: 'drill' });
+  }
+
+  function renderDrill() {
+    if (!session || session.pos >= session.queue.length) return renderDone();
+
+    var entry = session.queue[session.pos];
+    var item = entry.item;
+    var total = session.queue.length;
+    var pct = Math.round((session.pos / total) * 100);
+
+    var promptCard = el('div', { class: 'card prompt-card' }, [
+      entry.isReview ? el('span', { class: 'tag', text: 'from earlier' }) : null,
+      el('p', { class: 'label', text: 'Say this in Spanish' }),
+      el('p', { class: 'prompt', text: item.en }),
+      el('button', {
+        class: 'btn btn-icon', title: 'Hear the English prompt',
+        onclick: function () { MT.speech.speak(item.en, { lang: 'en', rate: 1 }); }
+      }, ['♪'])
+    ]);
+
+    var body = [promptCard];
+
+    if (!session.revealed) {
+      body.push(el('p', { class: 'coach', text: 'Take as long as you like. Work it out, say it out loud, and only then look.' }));
+
+      if (MT.store.settings.typed) {
+        var input = el('input', {
+          class: 'input input-answer', type: 'text', placeholder: 'Type it here (accents optional)',
+          autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false',
+          value: session.heard || '',
+          onkeydown: function (e) {
+            if (e.key === 'Enter') { session.heard = e.target.value; reveal(entry); }
+          }
+        });
+        body.push(input);
+        setTimeout(function () { input.focus(); }, 0);
+      }
+
+      var controls = [
+        el('button', { class: 'btn btn-primary', onclick: function () { reveal(entry); } }, ['Show me (space)'])
+      ];
+      if (MT.speech.recognitionSupported) {
+        controls.push(el('button', {
+          class: 'btn' + (session.listening ? ' btn-live' : ''),
+          onclick: function () { toggleListen(entry); }
+        }, [session.listening ? '● Listening…' : '● Say it']));
+      }
+      body.push(el('div', { class: 'row' }, controls));
+
+      if (session.heard && !MT.store.settings.typed) {
+        body.push(el('p', { class: 'heard', text: 'Heard: “' + session.heard + '”' }));
+      }
+    } else {
+      var verdict = session.verdict;
+      body.push(el('div', { class: 'card answer-card' }, [
+        el('p', { class: 'label', text: 'In Spanish' }),
+        el('p', { class: 'answer', text: item.es }),
+        el('button', {
+          class: 'btn btn-icon', title: 'Hear it again (r)',
+          onclick: function () { MT.speech.speak(item.es); }
+        }, ['♪']),
+        item.note ? el('p', { class: 'note', text: item.note }) : null,
+        verdict ? el('p', {
+          class: 'verdict verdict-' + verdict,
+          text: verdict === 'right' ? 'That is it exactly.'
+            : verdict === 'close' ? 'Close — compare it word for word.'
+            : 'Not yet. Say the correct sentence out loud twice, then move on.'
+        }) : null
+      ]));
+
+      body.push(el('p', { class: 'coach', text: 'Be honest with yourself here. Nothing is lost by marking it missed — it simply comes back.' }));
+      body.push(el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-good', onclick: function () { grade(entry, 'right'); } }, ['Got it  (1)']),
+        el('button', { class: 'btn btn-mid', onclick: function () { grade(entry, 'close'); } }, ['Nearly  (2)']),
+        el('button', { class: 'btn btn-bad', onclick: function () { grade(entry, 'wrong'); } }, ['Missed  (3)'])
+      ]));
+    }
+
+    var main = el('main', { class: 'wrap narrow drill' }, [
+      backBar(session.title + '  ·  ' + (session.pos + 1) + ' of ' + total),
+      el('div', { class: 'bar bar-slim' }, [el('div', { class: 'bar-fill', style: 'width:' + pct + '%' })])
+    ].concat(body));
+
+    clear(app);
+    app.appendChild(main);
+  }
+
+  function toggleListen(entry) {
+    if (session.listening) {
+      MT.speech.stopListening();
+      session.listening = false;
+      return render();
+    }
+    session.listening = true;
+    session.heard = '';
+    render();
+    MT.speech.listen(function (transcript, isFinal) {
+      session.heard = transcript;
+      if (isFinal) {
+        session.listening = false;
+        reveal(entry);
+      } else {
+        render();
+      }
+    }, function (err) {
+      session.listening = false;
+      if (err && err !== 'no-speech') session.heard = '';
+      render();
+    });
+  }
+
+  function reveal(entry) {
+    MT.speech.stopListening();
+    session.listening = false;
+    session.revealed = true;
+    session.verdict = session.heard ? MT.engine.check(entry.item, session.heard) : null;
+    if (MT.store.settings.autoPlay) MT.speech.speak(entry.item.es);
+    render();
+  }
+
+  function grade(entry, result) {
+    var record = MT.engine.schedule(MT.store.item(entry.key), result);
+    MT.store.recordItem(entry.key, record);
+    MT.store.countAnswer(result !== 'wrong');
+    if (result !== 'wrong') session.right += 1;
+
+    // A missed item is re-queued a few places on — inside this same session.
+    if (result === 'wrong') {
+      var reinsert = Math.min(session.pos + 4, session.queue.length);
+      session.queue.splice(reinsert, 0, entry);
+    }
+
+    session.pos += 1;
+    session.revealed = false;
+    session.heard = '';
+    session.verdict = null;
+    render();
+  }
+
+  function renderDone() {
+    var lesson = view.lessonId ? lessonById(view.lessonId) : null;
+    var total = session ? session.queue.length : 0;
+    var right = session ? session.right : 0;
+
+    var next = [];
+    if (lesson && lesson.conversations.length) {
+      next.push(el('button', {
+        class: 'btn btn-primary',
+        onclick: function () { go({ name: 'conversation', lessonId: lesson.id, convId: lesson.conversations[0].id }); }
+      }, ['Now use it in a conversation →']));
+    }
+    next.push(el('button', { class: 'btn', onclick: function () { go({ name: 'home' }); } }, ['Back to the course']));
+
+    var main = el('main', { class: 'wrap narrow' }, [
+      backBar('Done'),
+      el('h1', { class: 'screen-title', text: 'That is the session.' }),
+      el('p', { class: 'lede', text: 'You produced ' + total + ' sentences and got ' + right + ' of them. Whatever you missed is already scheduled to come back — you do not have to do anything about it.' }),
+      el('div', { class: 'row' }, next)
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+  }
+
+  /* ---------- conversation ---------- */
+
+  function renderConversation() {
+    var lesson = lessonById(view.lessonId);
+    var conv = lesson.conversations.filter(function (c) { return c.id === view.convId; })[0];
+
+    if (!session || session.kind !== 'conv' || session.convId !== conv.id) {
+      session = { kind: 'conv', convId: conv.id, pos: 0, revealed: false, heard: '', verdict: null, listening: false };
+      // The other person opens if theirs is the first turn.
+      if (conv.turns[0].who === 'them') setTimeout(function () { MT.speech.speak(conv.turns[0].es); }, 250);
+    }
+
+    var lines = [];
+    for (var i = 0; i <= session.pos && i < conv.turns.length; i++) {
+      lines.push(turnNode(conv, conv.turns[i], i));
+    }
+
+    var finished = session.pos >= conv.turns.length;
+    var footer;
+    if (finished) {
+      if (!MT.store.state.conversationsDone[conv.id]) MT.store.markConversationDone(conv.id);
+      footer = el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-primary', onclick: function () { playWhole(conv); } }, ['Play the whole conversation']),
+        el('button', {
+          class: 'btn',
+          onclick: function () { session = null; go({ name: 'conversation', lessonId: lesson.id, convId: conv.id }); }
+        }, ['Run it again']),
+        el('button', { class: 'btn btn-quiet', onclick: function () { go({ name: 'home' }); } }, ['Back to the course'])
+      ]);
+    } else {
+      footer = null;
+    }
+
+    var main = el('main', { class: 'wrap narrow conv' }, [
+      backBar(lesson.title),
+      el('h1', { class: 'screen-title', text: conv.title }),
+      el('p', { class: 'setting-line', text: conv.setting }),
+      el('div', { class: 'thread' }, lines),
+      footer
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+    var last = app.querySelector('.turn:last-child');
+    if (last && session.pos > 0) last.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  function turnNode(conv, turn, index) {
+    var isCurrent = index === session.pos;
+
+    if (turn.who === 'them') {
+      var node = el('div', { class: 'turn turn-them' }, [
+        el('p', { class: 'turn-es', text: turn.es }),
+        MT.store.settings.showEnglish ? el('p', { class: 'turn-en', text: turn.en }) : null,
+        turn.note ? el('p', { class: 'note', text: turn.note }) : null,
+        el('button', { class: 'btn btn-icon', title: 'Hear it again', onclick: function () { MT.speech.speak(turn.es); } }, ['♪'])
+      ]);
+      if (isCurrent) {
+        node.appendChild(el('div', { class: 'row row-tight' }, [
+          el('button', {
+            class: 'btn btn-primary btn-small',
+            onclick: function () { session.pos += 1; render(); autoSpeakCurrent(conv); }
+          }, ['Continue (space)'])
+        ]));
+      }
+      return node;
+    }
+
+    // Your turn.
+    var children = [el('p', { class: 'turn-cue', text: turn.cue })];
+
+    if (isCurrent && !session.revealed) {
+      if (MT.store.settings.typed) {
+        var input = el('input', {
+          class: 'input input-answer', type: 'text', placeholder: 'Your answer',
+          autocomplete: 'off', spellcheck: 'false',
+          onkeydown: function (e) { if (e.key === 'Enter') { session.heard = e.target.value; revealTurn(turn); } }
+        });
+        children.push(input);
+        setTimeout(function () { input.focus(); }, 0);
+      }
+      var controls = [
+        el('button', { class: 'btn btn-primary btn-small', onclick: function () { revealTurn(turn); } }, ['Show me (space)'])
+      ];
+      if (MT.speech.recognitionSupported) {
+        controls.push(el('button', {
+          class: 'btn btn-small' + (session.listening ? ' btn-live' : ''),
+          onclick: function () { toggleListenTurn(turn); }
+        }, [session.listening ? '● Listening…' : '● Say it']));
+      }
+      children.push(el('div', { class: 'row row-tight' }, controls));
+      if (session.heard) children.push(el('p', { class: 'heard', text: 'Heard: “' + session.heard + '”' }));
+    } else if (index < session.pos || session.revealed) {
+      children.push(el('p', { class: 'turn-es', text: turn.es }));
+      if (turn.note) children.push(el('p', { class: 'note', text: turn.note }));
+      children.push(el('button', { class: 'btn btn-icon', title: 'Hear it again', onclick: function () { MT.speech.speak(turn.es); } }, ['♪']));
+      if (isCurrent) {
+        if (session.verdict) {
+          children.push(el('p', {
+            class: 'verdict verdict-' + session.verdict,
+            text: session.verdict === 'right' ? 'Exactly that.'
+              : session.verdict === 'close' ? 'Close — check it word for word.'
+              : 'Say the correct line out loud, then carry on.'
+          }));
+        }
+        children.push(el('div', { class: 'row row-tight' }, [
+          el('button', {
+            class: 'btn btn-primary btn-small',
+            onclick: function () { nextTurn(conv); }
+          }, ['Continue (space)'])
+        ]));
+      }
+    }
+
+    return el('div', { class: 'turn turn-you' + (isCurrent ? ' turn-current' : '') }, children);
+  }
+
+  function revealTurn(turn) {
+    MT.speech.stopListening();
+    session.listening = false;
+    session.revealed = true;
+    session.verdict = session.heard ? MT.engine.check(turn, session.heard) : null;
+    if (MT.store.settings.autoPlay) MT.speech.speak(turn.es);
+    render();
+  }
+
+  function toggleListenTurn(turn) {
+    if (session.listening) {
+      MT.speech.stopListening();
+      session.listening = false;
+      return render();
+    }
+    session.listening = true;
+    session.heard = '';
+    render();
+    MT.speech.listen(function (transcript, isFinal) {
+      session.heard = transcript;
+      if (isFinal) { session.listening = false; revealTurn(turn); }
+      else render();
+    }, function (err) {
+      session.listening = false;
+      if (err && err !== 'no-speech') session.heard = '';
+      render();
+    });
+  }
+
+  function nextTurn(conv) {
+    session.pos += 1;
+    session.revealed = false;
+    session.heard = '';
+    session.verdict = null;
+    render();
+    autoSpeakCurrent(conv);
+  }
+
+  function autoSpeakCurrent(conv) {
+    var turn = conv.turns[session.pos];
+    if (turn && turn.who === 'them' && MT.store.settings.autoPlay) {
+      setTimeout(function () { MT.speech.speak(turn.es); }, 200);
+    }
+  }
+
+  function playWhole(conv) {
+    var i = 0;
+    (function next() {
+      if (i >= conv.turns.length) return;
+      var turn = conv.turns[i++];
+      MT.speech.speak(turn.es).then(function () { setTimeout(next, 350); });
+    })();
+  }
+
+  /* ---------- keyboard ---------- */
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    var k = e.key;
+
+    if (k === 'Escape') { go({ name: 'home' }); return; }
+
+    if (view.name === 'drill' && session) {
+      var entry = session.queue[session.pos];
+      if (!entry) return;
+      if (k === ' ') { e.preventDefault(); if (!session.revealed) reveal(entry); return; }
+      if (session.revealed) {
+        if (k === '1') return grade(entry, 'right');
+        if (k === '2') return grade(entry, 'close');
+        if (k === '3') return grade(entry, 'wrong');
+        if (k === 'r' || k === 'R') return void MT.speech.speak(entry.item.es);
+      }
+    }
+
+    if (view.name === 'conversation' && session && session.kind === 'conv') {
+      var conv = lessonById(view.lessonId).conversations.filter(function (c) { return c.id === view.convId; })[0];
+      var turn = conv.turns[session.pos];
+      if (!turn) return;
+      if (k === ' ') {
+        e.preventDefault();
+        if (turn.who === 'them') { session.pos += 1; render(); autoSpeakCurrent(conv); }
+        else if (!session.revealed) revealTurn(turn);
+        else nextTurn(conv);
+        return;
+      }
+      if (k === 'r' || k === 'R') MT.speech.speak(turn.es);
+    }
+  });
+
+  /* ---------- boot ---------- */
+
+  function render() {
+    if (view.name === 'home') return renderHome();
+    if (view.name === 'blocks') return renderBlocks();
+    if (view.name === 'drill') return renderDrill();
+    if (view.name === 'conversation') return renderConversation();
+    renderHome();
+  }
+
+  MT.render = render;
+  render();
+})(window.MT);
