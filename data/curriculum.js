@@ -499,3 +499,47 @@ window.MT.curriculum = [
     ]
   }
 ];
+
+/* The first two minutes.
+ *
+ * A brand-new learner does not need a course map, they need to succeed at
+ * something immediately. This walkthrough hands over one piece at a time and
+ * has them saying real Spanish inside a minute, with no choices to make and
+ * no grading to think about. It is the method's own promise — the teacher
+ * carries the anxiety, not the student — applied to the first screen.
+ */
+window.MT.intro = {
+  steps: [
+    {
+      teach: 'Here is the first thing nobody tells you: you already know thousands of Spanish words.',
+      detail: 'Almost any English word ending in -ible or -able is already Spanish. The spelling barely moves.',
+      hear: 'posible, terrible, probable, imposible',
+      caption: 'possible · terrible · probable · impossible'
+    },
+    {
+      teach: 'Now one new word: es. It means "it is".',
+      detail: 'That is all you need for a full sentence. Say it out loud before you look — working it out is the part that teaches you.',
+      ask: { en: 'It is possible.', es: 'Es posible.' }
+    },
+    {
+      teach: 'To make it negative, put no in front. Nothing else changes.',
+      detail: 'No rule to memorise, no ending to alter. Just no.',
+      ask: { en: 'It is not possible.', es: 'No es posible.' }
+    },
+    {
+      teach: 'To ask a question, use the very same words and lift your voice at the end.',
+      detail: 'Spanish does not need a "do" the way English does. The words stay put.',
+      ask: { en: 'Is it possible?', es: '¿Es posible?' }
+    },
+    {
+      teach: 'Last one. muy means "very", and importante needs no explanation.',
+      detail: 'Watch how the pieces you already have simply click together.',
+      ask: { en: 'It is very important.', es: 'Es muy importante.' }
+    }
+  ],
+  done: {
+    title: 'You just spoke Spanish.',
+    body: 'Four sentences, and you memorised nothing. That is the whole method: you are given small pieces, and you build with them straight away. Every lesson works exactly like that, and anything you forget comes back to you automatically — keeping track is the app’s job, not yours.',
+    next: 'Lesson 1 carries straight on from here.'
+  }
+};

@@ -362,6 +362,34 @@ p { margin: 0 0 1rem; }
   .contrast-pair { grid-template-columns: 1fr; gap: .8rem; }
   .ref-list { grid-template-columns: 1fr; }
 }
+
+/* ---- first run ---- */
+.welcome h1 { font-size: clamp(2rem, 5.5vw, 3rem); margin: 0 0 1rem; text-wrap: balance; }
+
+.promises { list-style: none; padding: 0; margin: 2rem 0; display: grid; gap: 1rem; }
+.promises li {
+  padding-left: 1.1rem; border-left: 3px solid var(--accent);
+  font-size: 1rem; color: var(--ink-soft);
+}
+.promises strong { color: var(--ink); font-weight: 600; }
+
+.btn-big { font-size: 1.05rem; padding: 1rem 1.5rem; }
+
+.teach {
+  font-size: clamp(1.2rem, 3.5vw, 1.5rem); line-height: 1.4;
+  margin: 0 0 .6rem; text-wrap: balance;
+}
+.hear-card { text-align: left; }
+.hear-card .answer { font-size: clamp(1.3rem, 4vw, 1.7rem); }
+
+.lost-link { margin: 0 0 1rem; }
+.linkish {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font: inherit; color: var(--accent); text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.linkish:hover { text-decoration-thickness: 2px; }
+.linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
 
 <div id="app"></div>
@@ -872,6 +900,50 @@ window.MT.curriculum = [
     ]
   }
 ];
+
+/* The first two minutes.
+ *
+ * A brand-new learner does not need a course map, they need to succeed at
+ * something immediately. This walkthrough hands over one piece at a time and
+ * has them saying real Spanish inside a minute, with no choices to make and
+ * no grading to think about. It is the method's own promise — the teacher
+ * carries the anxiety, not the student — applied to the first screen.
+ */
+window.MT.intro = {
+  steps: [
+    {
+      teach: 'Here is the first thing nobody tells you: you already know thousands of Spanish words.',
+      detail: 'Almost any English word ending in -ible or -able is already Spanish. The spelling barely moves.',
+      hear: 'posible, terrible, probable, imposible',
+      caption: 'possible · terrible · probable · impossible'
+    },
+    {
+      teach: 'Now one new word: es. It means "it is".',
+      detail: 'That is all you need for a full sentence. Say it out loud before you look — working it out is the part that teaches you.',
+      ask: { en: 'It is possible.', es: 'Es posible.' }
+    },
+    {
+      teach: 'To make it negative, put no in front. Nothing else changes.',
+      detail: 'No rule to memorise, no ending to alter. Just no.',
+      ask: { en: 'It is not possible.', es: 'No es posible.' }
+    },
+    {
+      teach: 'To ask a question, use the very same words and lift your voice at the end.',
+      detail: 'Spanish does not need a "do" the way English does. The words stay put.',
+      ask: { en: 'Is it possible?', es: '¿Es posible?' }
+    },
+    {
+      teach: 'Last one. muy means "very", and importante needs no explanation.',
+      detail: 'Watch how the pieces you already have simply click together.',
+      ask: { en: 'It is very important.', es: 'Es muy importante.' }
+    }
+  ],
+  done: {
+    title: 'You just spoke Spanish.',
+    body: 'Four sentences, and you memorised nothing. That is the whole method: you are given small pieces, and you build with them straight away. Every lesson works exactly like that, and anything you forget comes back to you automatically — keeping track is the app’s job, not yours.',
+    next: 'Lesson 1 carries straight on from here.'
+  }
+};
 
 /* ===== data/reference.js ===== */
 /* The reference shelf: sayings, vocabulary, and the places where Spanish and
@@ -1542,6 +1614,7 @@ window.MT = window.MT || {};
     items: {},          // itemKey -> { box, due, seen, right, wrong }
     lessonsStarted: {}, // lessonId -> timestamp
     conversationsDone: {},
+    onboarded: false,
     streak: { count: 0, lastDay: null },
     totals: { answered: 0, right: 0 }
   };
@@ -1612,6 +1685,11 @@ window.MT = window.MT || {};
         state.lessonsStarted[lessonId] = Date.now();
         this.save();
       }
+    },
+
+    markOnboarded: function () {
+      state.onboarded = true;
+      this.save();
     },
 
     markConversationDone: function (id) {
@@ -2049,6 +2127,11 @@ window.MT = window.MT || {};
 
     // The shelf is deliberately outside the course: look things up here, but
     // do not mistake reading a list for learning.
+    var lost = el('p', { class: 'muted lost-link' }, [
+      'Not sure where to start? ',
+      el('button', { class: 'linkish', onclick: function () { startIntro(); } }, ['Take the two-minute intro again'])
+    ]);
+
     var shelf = el('button', { class: 'shelf', onclick: function () { go({ name: 'reference', tab: 'sayings', q: '' }); } }, [
       el('h3', { text: 'The reference shelf' }),
       el('p', { text: 'Sayings people actually use, a working vocabulary, and the points where Spanish and English genuinely disagree. Nothing here is drilled or scheduled — it is for looking things up.' }),
@@ -2058,6 +2141,7 @@ window.MT = window.MT || {};
     var main = el('main', { class: 'wrap' }, [
       header, noSave, stats, actions,
       el('h2', { class: 'section', text: 'The course' }),
+      lost,
       list,
       shelf,
       renderSettings()
@@ -2586,6 +2670,131 @@ window.MT = window.MT || {};
     })();
   }
 
+  /* ---------- first run ---------- */
+
+  function renderWelcome() {
+    var main = el('main', { class: 'wrap narrow welcome' }, [
+      el('p', { class: 'eyebrow', text: 'Spanish · the Michel Thomas way' }),
+      el('h1', { text: 'You will be speaking in about two minutes.' }),
+      el('p', { class: 'lede', text: 'No writing. No memorising. No homework. You will be given one small piece at a time and asked to build with it, and you will get things right almost immediately — that is by design, not luck.' }),
+
+      el('ul', { class: 'promises' }, [
+        el('li', { html: '<strong>Say it out loud.</strong> Nothing is typed. If you are somewhere you cannot speak, whisper it.' }),
+        el('li', { html: '<strong>Take your time.</strong> Nothing is timed and nothing is scored against you. The pause where you work it out is the part that teaches.' }),
+        el('li', { html: '<strong>Forgetting is fine.</strong> Anything you lose comes back on its own. You never have to plan revision.' })
+      ]),
+
+      el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-primary btn-big', onclick: function () { startIntro(); } }, ['Say your first Spanish sentence →'])
+      ]),
+      el('p', { class: 'muted', text: 'Sound on if you can — you learn this by ear.' }),
+
+      el('button', {
+        class: 'btn btn-quiet',
+        onclick: function () { MT.store.markOnboarded(); go({ name: 'home' }); }
+      }, ['Skip and show me the course'])
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+  }
+
+  function startIntro() {
+    session = { kind: 'intro', pos: 0, revealed: false };
+    go({ name: 'intro' });
+  }
+
+  function renderIntro() {
+    var steps = MT.intro.steps;
+    if (!session || session.kind !== 'intro') return startIntro();
+
+    if (session.pos >= steps.length) return renderIntroDone();
+
+    var step = steps[session.pos];
+    var body = [
+      el('p', { class: 'label', text: 'Step ' + (session.pos + 1) + ' of ' + steps.length }),
+      el('p', { class: 'teach', text: step.teach }),
+      step.detail ? el('p', { class: 'coach', text: step.detail }) : null
+    ];
+
+    if (step.hear) {
+      body.push(el('div', { class: 'card hear-card' }, [
+        el('p', { class: 'answer', text: step.hear }),
+        step.caption ? el('p', { class: 'ref-en', text: step.caption }) : null,
+        el('button', {
+          class: 'btn btn-icon', title: 'Hear it',
+          onclick: function () { MT.speech.speak(step.hear); }
+        }, ['♪'])
+      ]));
+      body.push(el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-primary', onclick: function () { nextIntro(); } }, ['Continue (space)'])
+      ]));
+    } else if (step.ask) {
+      body.push(el('div', { class: 'card prompt-card' }, [
+        el('p', { class: 'label', text: 'Say this in Spanish, out loud' }),
+        el('p', { class: 'prompt', text: step.ask.en })
+      ]));
+
+      if (!session.revealed) {
+        body.push(el('div', { class: 'row' }, [
+          el('button', { class: 'btn btn-primary', onclick: function () { session.revealed = true; MT.speech.speak(step.ask.es); render(); } }, ['Show me (space)'])
+        ]));
+        body.push(el('p', { class: 'muted', text: 'Have a go first, even if you are not sure. Being wrong here costs nothing.' }));
+      } else {
+        body.push(el('div', { class: 'card answer-card' }, [
+          el('p', { class: 'label', text: 'In Spanish' }),
+          el('p', { class: 'answer', text: step.ask.es }),
+          el('button', {
+            class: 'btn btn-icon', title: 'Hear it again',
+            onclick: function () { MT.speech.speak(step.ask.es); }
+          }, ['♪'])
+        ]));
+        body.push(el('div', { class: 'row' }, [
+          el('button', { class: 'btn btn-primary', onclick: function () { nextIntro(); } }, ['Continue (space)'])
+        ]));
+      }
+    }
+
+    var pct = Math.round((session.pos / steps.length) * 100);
+    var main = el('main', { class: 'wrap narrow' }, [
+      el('div', { class: 'topbar' }, [
+        el('button', { class: 'btn btn-quiet', onclick: function () { MT.store.markOnboarded(); go({ name: 'home' }); } }, ['Skip']),
+        el('span', { class: 'topbar-label', text: 'Getting started' })
+      ]),
+      el('div', { class: 'bar bar-slim' }, [el('div', { class: 'bar-fill', style: 'width:' + pct + '%' })])
+    ].concat(body));
+
+    clear(app);
+    app.appendChild(main);
+  }
+
+  function nextIntro() {
+    session.pos += 1;
+    session.revealed = false;
+    render();
+  }
+
+  function renderIntroDone() {
+    var d = MT.intro.done;
+    MT.store.markOnboarded();
+
+    var main = el('main', { class: 'wrap narrow' }, [
+      el('h1', { class: 'screen-title', text: d.title }),
+      el('p', { class: 'lede', text: d.body }),
+      el('p', { class: 'coach', text: d.next }),
+      el('div', { class: 'row' }, [
+        el('button', {
+          class: 'btn btn-primary btn-big',
+          onclick: function () { go({ name: 'blocks', lessonId: course[0].id }); }
+        }, ['Start lesson 1 →']),
+        el('button', { class: 'btn btn-quiet', onclick: function () { go({ name: 'home' }); } }, ['See the whole course'])
+      ])
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+  }
+
   /* ---------- reference shelf ---------- */
 
   function countSayings() { return MT.sayings.reduce(function (n, g) { return n + g.items.length; }, 0); }
@@ -2722,6 +2931,16 @@ window.MT = window.MT || {};
 
     if (k === 'Escape') { go({ name: 'home' }); return; }
 
+    if (view.name === 'intro' && session && session.kind === 'intro') {
+      if (k === ' ') {
+        e.preventDefault();
+        var step = MT.intro.steps[session.pos];
+        if (step && step.ask && !session.revealed) { session.revealed = true; MT.speech.speak(step.ask.es); render(); }
+        else nextIntro();
+        return;
+      }
+    }
+
     if (view.name === 'drill' && session) {
       var entry = session.queue[session.pos];
       if (!entry) return;
@@ -2752,7 +2971,13 @@ window.MT = window.MT || {};
   /* ---------- boot ---------- */
 
   function render() {
-    if (view.name === 'home') return renderHome();
+    if (view.name === 'welcome') return renderWelcome();
+    if (view.name === 'intro') return renderIntro();
+    if (view.name === 'home') {
+      // Never open on a wall of eight lessons. A newcomer gets one door.
+      if (!MT.store.state.onboarded && !MT.store.state.totals.answered) return renderWelcome();
+      return renderHome();
+    }
     if (view.name === 'reference') return renderReference();
     if (view.name === 'blocks') return renderBlocks();
     if (view.name === 'drill') return renderDrill();

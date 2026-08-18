@@ -11,6 +11,7 @@ window.MT = window.MT || {};
     items: {},          // itemKey -> { box, due, seen, right, wrong }
     lessonsStarted: {}, // lessonId -> timestamp
     conversationsDone: {},
+    onboarded: false,
     streak: { count: 0, lastDay: null },
     totals: { answered: 0, right: 0 }
   };
@@ -81,6 +82,11 @@ window.MT = window.MT || {};
         state.lessonsStarted[lessonId] = Date.now();
         this.save();
       }
+    },
+
+    markOnboarded: function () {
+      state.onboarded = true;
+      this.save();
     },
 
     markConversationDone: function (id) {

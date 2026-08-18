@@ -85,6 +85,11 @@
 
     // The shelf is deliberately outside the course: look things up here, but
     // do not mistake reading a list for learning.
+    var lost = el('p', { class: 'muted lost-link' }, [
+      'Not sure where to start? ',
+      el('button', { class: 'linkish', onclick: function () { startIntro(); } }, ['Take the two-minute intro again'])
+    ]);
+
     var shelf = el('button', { class: 'shelf', onclick: function () { go({ name: 'reference', tab: 'sayings', q: '' }); } }, [
       el('h3', { text: 'The reference shelf' }),
       el('p', { text: 'Sayings people actually use, a working vocabulary, and the points where Spanish and English genuinely disagree. Nothing here is drilled or scheduled — it is for looking things up.' }),
@@ -94,6 +99,7 @@
     var main = el('main', { class: 'wrap' }, [
       header, noSave, stats, actions,
       el('h2', { class: 'section', text: 'The course' }),
+      lost,
       list,
       shelf,
       renderSettings()
@@ -622,6 +628,131 @@
     })();
   }
 
+  /* ---------- first run ---------- */
+
+  function renderWelcome() {
+    var main = el('main', { class: 'wrap narrow welcome' }, [
+      el('p', { class: 'eyebrow', text: 'Spanish · the Michel Thomas way' }),
+      el('h1', { text: 'You will be speaking in about two minutes.' }),
+      el('p', { class: 'lede', text: 'No writing. No memorising. No homework. You will be given one small piece at a time and asked to build with it, and you will get things right almost immediately — that is by design, not luck.' }),
+
+      el('ul', { class: 'promises' }, [
+        el('li', { html: '<strong>Say it out loud.</strong> Nothing is typed. If you are somewhere you cannot speak, whisper it.' }),
+        el('li', { html: '<strong>Take your time.</strong> Nothing is timed and nothing is scored against you. The pause where you work it out is the part that teaches.' }),
+        el('li', { html: '<strong>Forgetting is fine.</strong> Anything you lose comes back on its own. You never have to plan revision.' })
+      ]),
+
+      el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-primary btn-big', onclick: function () { startIntro(); } }, ['Say your first Spanish sentence →'])
+      ]),
+      el('p', { class: 'muted', text: 'Sound on if you can — you learn this by ear.' }),
+
+      el('button', {
+        class: 'btn btn-quiet',
+        onclick: function () { MT.store.markOnboarded(); go({ name: 'home' }); }
+      }, ['Skip and show me the course'])
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+  }
+
+  function startIntro() {
+    session = { kind: 'intro', pos: 0, revealed: false };
+    go({ name: 'intro' });
+  }
+
+  function renderIntro() {
+    var steps = MT.intro.steps;
+    if (!session || session.kind !== 'intro') return startIntro();
+
+    if (session.pos >= steps.length) return renderIntroDone();
+
+    var step = steps[session.pos];
+    var body = [
+      el('p', { class: 'label', text: 'Step ' + (session.pos + 1) + ' of ' + steps.length }),
+      el('p', { class: 'teach', text: step.teach }),
+      step.detail ? el('p', { class: 'coach', text: step.detail }) : null
+    ];
+
+    if (step.hear) {
+      body.push(el('div', { class: 'card hear-card' }, [
+        el('p', { class: 'answer', text: step.hear }),
+        step.caption ? el('p', { class: 'ref-en', text: step.caption }) : null,
+        el('button', {
+          class: 'btn btn-icon', title: 'Hear it',
+          onclick: function () { MT.speech.speak(step.hear); }
+        }, ['♪'])
+      ]));
+      body.push(el('div', { class: 'row' }, [
+        el('button', { class: 'btn btn-primary', onclick: function () { nextIntro(); } }, ['Continue (space)'])
+      ]));
+    } else if (step.ask) {
+      body.push(el('div', { class: 'card prompt-card' }, [
+        el('p', { class: 'label', text: 'Say this in Spanish, out loud' }),
+        el('p', { class: 'prompt', text: step.ask.en })
+      ]));
+
+      if (!session.revealed) {
+        body.push(el('div', { class: 'row' }, [
+          el('button', { class: 'btn btn-primary', onclick: function () { session.revealed = true; MT.speech.speak(step.ask.es); render(); } }, ['Show me (space)'])
+        ]));
+        body.push(el('p', { class: 'muted', text: 'Have a go first, even if you are not sure. Being wrong here costs nothing.' }));
+      } else {
+        body.push(el('div', { class: 'card answer-card' }, [
+          el('p', { class: 'label', text: 'In Spanish' }),
+          el('p', { class: 'answer', text: step.ask.es }),
+          el('button', {
+            class: 'btn btn-icon', title: 'Hear it again',
+            onclick: function () { MT.speech.speak(step.ask.es); }
+          }, ['♪'])
+        ]));
+        body.push(el('div', { class: 'row' }, [
+          el('button', { class: 'btn btn-primary', onclick: function () { nextIntro(); } }, ['Continue (space)'])
+        ]));
+      }
+    }
+
+    var pct = Math.round((session.pos / steps.length) * 100);
+    var main = el('main', { class: 'wrap narrow' }, [
+      el('div', { class: 'topbar' }, [
+        el('button', { class: 'btn btn-quiet', onclick: function () { MT.store.markOnboarded(); go({ name: 'home' }); } }, ['Skip']),
+        el('span', { class: 'topbar-label', text: 'Getting started' })
+      ]),
+      el('div', { class: 'bar bar-slim' }, [el('div', { class: 'bar-fill', style: 'width:' + pct + '%' })])
+    ].concat(body));
+
+    clear(app);
+    app.appendChild(main);
+  }
+
+  function nextIntro() {
+    session.pos += 1;
+    session.revealed = false;
+    render();
+  }
+
+  function renderIntroDone() {
+    var d = MT.intro.done;
+    MT.store.markOnboarded();
+
+    var main = el('main', { class: 'wrap narrow' }, [
+      el('h1', { class: 'screen-title', text: d.title }),
+      el('p', { class: 'lede', text: d.body }),
+      el('p', { class: 'coach', text: d.next }),
+      el('div', { class: 'row' }, [
+        el('button', {
+          class: 'btn btn-primary btn-big',
+          onclick: function () { go({ name: 'blocks', lessonId: course[0].id }); }
+        }, ['Start lesson 1 →']),
+        el('button', { class: 'btn btn-quiet', onclick: function () { go({ name: 'home' }); } }, ['See the whole course'])
+      ])
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+  }
+
   /* ---------- reference shelf ---------- */
 
   function countSayings() { return MT.sayings.reduce(function (n, g) { return n + g.items.length; }, 0); }
@@ -758,6 +889,16 @@
 
     if (k === 'Escape') { go({ name: 'home' }); return; }
 
+    if (view.name === 'intro' && session && session.kind === 'intro') {
+      if (k === ' ') {
+        e.preventDefault();
+        var step = MT.intro.steps[session.pos];
+        if (step && step.ask && !session.revealed) { session.revealed = true; MT.speech.speak(step.ask.es); render(); }
+        else nextIntro();
+        return;
+      }
+    }
+
     if (view.name === 'drill' && session) {
       var entry = session.queue[session.pos];
       if (!entry) return;
@@ -788,7 +929,13 @@
   /* ---------- boot ---------- */
 
   function render() {
-    if (view.name === 'home') return renderHome();
+    if (view.name === 'welcome') return renderWelcome();
+    if (view.name === 'intro') return renderIntro();
+    if (view.name === 'home') {
+      // Never open on a wall of eight lessons. A newcomer gets one door.
+      if (!MT.store.state.onboarded && !MT.store.state.totals.answered) return renderWelcome();
+      return renderHome();
+    }
     if (view.name === 'reference') return renderReference();
     if (view.name === 'blocks') return renderBlocks();
     if (view.name === 'drill') return renderDrill();
