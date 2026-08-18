@@ -316,9 +316,11 @@
     if (!session.revealed) {
       body.push(el('p', {
         class: 'coach',
-        text: session.attempts
-          ? 'Have another go. You can take a clue instead of the whole answer.'
-          : 'Take as long as you like. Work it out, say it out loud, and only then look.'
+        text: session.practised
+          ? 'Hidden again. Say the whole thing out loud from memory — that is the rep that counts, not reading it off the screen.'
+          : session.attempts
+            ? 'Have another go. You can take a clue instead of the whole answer.'
+            : 'Take as long as you like. Work it out, say it out loud, and only then look.'
       }));
 
       body.push(clueCard(item));
@@ -353,10 +355,11 @@
       body.push(el('div', { class: 'card answer-card' }, [
         el('p', { class: 'label', text: 'In Spanish' }),
         el('p', { class: 'answer', text: item.es }),
-        el('button', {
-          class: 'btn btn-icon', title: 'Hear it again (r)',
-          onclick: function () { MT.speech.speak(item.es); }
-        }, ['♪']),
+        el('div', { class: 'row row-tight' }, [
+          el('button', { class: 'btn btn-small', onclick: function () { MT.speech.speak(item.es); } }, ['♪ Hear it (r)']),
+          el('button', { class: 'btn btn-small', onclick: function () { MT.speech.speak(item.es, { rate: 0.55 }); } }, ['♪ Slowly']),
+          el('button', { class: 'btn btn-small btn-practise', onclick: function () { practise(); } }, ['Hide it and let me say it (p)'])
+        ]),
         item.note ? el('p', { class: 'note', text: item.note }) : null,
         verdict ? el('p', {
           class: 'verdict verdict-' + verdict,
@@ -474,6 +477,21 @@
     render();
   }
 
+  /* Seeing the answer is not the same as being able to produce it. This puts
+     the learner straight back in front of the same prompt with the answer
+     hidden, so the last thing they do before grading is say it unaided. */
+  function practise() {
+    session.revealed = false;
+    session.clues = -1;
+    session.attempts = 0;
+    session.lastTry = '';
+    session.typedValue = '';
+    session.heard = '';
+    session.verdict = null;
+    session.practised = (session.practised || 0) + 1;
+    render();
+  }
+
   function grade(entry, result) {
     var record = MT.engine.schedule(MT.store.item(entry.key), result);
     MT.store.recordItem(entry.key, record);
@@ -494,6 +512,7 @@
     session.attempts = 0;
     session.lastTry = '';
     session.typedValue = '';
+    session.practised = 0;
     render();
   }
 
@@ -622,6 +641,12 @@
       if (turn.note) children.push(el('p', { class: 'note', text: turn.note }));
       children.push(el('button', { class: 'btn btn-icon', title: 'Hear it again', onclick: function () { MT.speech.speak(turn.es); } }, ['♪']));
       if (isCurrent) {
+        children.push(el('div', { class: 'row row-tight' }, [
+          el('button', { class: 'btn btn-small', onclick: function () { MT.speech.speak(turn.es, { rate: 0.55 }); } }, ['♪ Slowly']),
+          el('button', { class: 'btn btn-small btn-practise', onclick: function () { practise(); } }, ['Hide it and let me say it (p)'])
+        ]));
+      }
+      if (isCurrent) {
         if (session.verdict) {
           children.push(el('p', {
             class: 'verdict verdict-' + session.verdict,
@@ -693,6 +718,7 @@
     session.attempts = 0;
     session.lastTry = '';
     session.typedValue = '';
+    session.practised = 0;
     render();
     autoSpeakCurrent(conv);
   }
@@ -1006,6 +1032,7 @@
         if (k === '2') return grade(entry, 'close');
         if (k === '3') return grade(entry, 'wrong');
         if (k === 'r' || k === 'R') return void MT.speech.speak(entry.item.es);
+        if (k === 'p' || k === 'P') return practise();
       }
     }
 
@@ -1021,6 +1048,7 @@
         return;
       }
       if ((k === 'c' || k === 'C') && turn.who === 'you' && !session.revealed) { takeClue(turn); return; }
+      if ((k === 'p' || k === 'P') && turn.who === 'you' && session.revealed) { practise(); return; }
       if (k === 'r' || k === 'R') MT.speech.speak(turn.es);
     }
   });

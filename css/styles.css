@@ -398,3 +398,8 @@ p { margin: 0 0 1rem; }
 .retry { margin: .8rem 0 0; color: var(--mid); font-size: .95rem; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; }
 .btn[disabled]:hover { border-color: var(--line); color: var(--ink); background: var(--bg-raised); }
+
+/* The practice control is the one worth reaching for after a reveal, so it
+   reads as an action rather than another quiet secondary button. */
+.btn-practise { border-color: var(--accent); color: var(--accent); }
+.btn-practise:hover { background: var(--accent-soft); }

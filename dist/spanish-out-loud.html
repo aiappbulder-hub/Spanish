@@ -1,6 +1,6 @@
 <title>Spanish Out Loud</title>
 <meta name="description" content="A speaking-first Spanish course built on the Michel Thomas method: build sentences from the first minute, and hold a real conversation at the end of every lesson.">
-<script>window.MT_BUILD = "5efb4ad4";</script>
+<script>window.MT_BUILD = "7945ebe8";</script>
 <style>
 /* Warm paper, generous type, nothing that competes with the sentence you are
    trying to produce. The learner should be able to read the prompt from a
@@ -402,6 +402,11 @@ p { margin: 0 0 1rem; }
 .retry { margin: .8rem 0 0; color: var(--mid); font-size: .95rem; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; }
 .btn[disabled]:hover { border-color: var(--line); color: var(--ink); background: var(--bg-raised); }
+
+/* The practice control is the one worth reaching for after a reveal, so it
+   reads as an action rather than another quiet secondary button. */
+.btn-practise { border-color: var(--accent); color: var(--accent); }
+.btn-practise:hover { background: var(--accent-soft); }
 </style>
 
 <div id="app"></div>
@@ -2389,9 +2394,11 @@ window.MT = window.MT || {};
     if (!session.revealed) {
       body.push(el('p', {
         class: 'coach',
-        text: session.attempts
-          ? 'Have another go. You can take a clue instead of the whole answer.'
-          : 'Take as long as you like. Work it out, say it out loud, and only then look.'
+        text: session.practised
+          ? 'Hidden again. Say the whole thing out loud from memory — that is the rep that counts, not reading it off the screen.'
+          : session.attempts
+            ? 'Have another go. You can take a clue instead of the whole answer.'
+            : 'Take as long as you like. Work it out, say it out loud, and only then look.'
       }));
 
       body.push(clueCard(item));
@@ -2426,10 +2433,11 @@ window.MT = window.MT || {};
       body.push(el('div', { class: 'card answer-card' }, [
         el('p', { class: 'label', text: 'In Spanish' }),
         el('p', { class: 'answer', text: item.es }),
-        el('button', {
-          class: 'btn btn-icon', title: 'Hear it again (r)',
-          onclick: function () { MT.speech.speak(item.es); }
-        }, ['♪']),
+        el('div', { class: 'row row-tight' }, [
+          el('button', { class: 'btn btn-small', onclick: function () { MT.speech.speak(item.es); } }, ['♪ Hear it (r)']),
+          el('button', { class: 'btn btn-small', onclick: function () { MT.speech.speak(item.es, { rate: 0.55 }); } }, ['♪ Slowly']),
+          el('button', { class: 'btn btn-small btn-practise', onclick: function () { practise(); } }, ['Hide it and let me say it (p)'])
+        ]),
         item.note ? el('p', { class: 'note', text: item.note }) : null,
         verdict ? el('p', {
           class: 'verdict verdict-' + verdict,
@@ -2547,6 +2555,21 @@ window.MT = window.MT || {};
     render();
   }
 
+  /* Seeing the answer is not the same as being able to produce it. This puts
+     the learner straight back in front of the same prompt with the answer
+     hidden, so the last thing they do before grading is say it unaided. */
+  function practise() {
+    session.revealed = false;
+    session.clues = -1;
+    session.attempts = 0;
+    session.lastTry = '';
+    session.typedValue = '';
+    session.heard = '';
+    session.verdict = null;
+    session.practised = (session.practised || 0) + 1;
+    render();
+  }
+
   function grade(entry, result) {
     var record = MT.engine.schedule(MT.store.item(entry.key), result);
     MT.store.recordItem(entry.key, record);
@@ -2567,6 +2590,7 @@ window.MT = window.MT || {};
     session.attempts = 0;
     session.lastTry = '';
     session.typedValue = '';
+    session.practised = 0;
     render();
   }
 
@@ -2695,6 +2719,12 @@ window.MT = window.MT || {};
       if (turn.note) children.push(el('p', { class: 'note', text: turn.note }));
       children.push(el('button', { class: 'btn btn-icon', title: 'Hear it again', onclick: function () { MT.speech.speak(turn.es); } }, ['♪']));
       if (isCurrent) {
+        children.push(el('div', { class: 'row row-tight' }, [
+          el('button', { class: 'btn btn-small', onclick: function () { MT.speech.speak(turn.es, { rate: 0.55 }); } }, ['♪ Slowly']),
+          el('button', { class: 'btn btn-small btn-practise', onclick: function () { practise(); } }, ['Hide it and let me say it (p)'])
+        ]));
+      }
+      if (isCurrent) {
         if (session.verdict) {
           children.push(el('p', {
             class: 'verdict verdict-' + session.verdict,
@@ -2766,6 +2796,7 @@ window.MT = window.MT || {};
     session.attempts = 0;
     session.lastTry = '';
     session.typedValue = '';
+    session.practised = 0;
     render();
     autoSpeakCurrent(conv);
   }
@@ -3079,6 +3110,7 @@ window.MT = window.MT || {};
         if (k === '2') return grade(entry, 'close');
         if (k === '3') return grade(entry, 'wrong');
         if (k === 'r' || k === 'R') return void MT.speech.speak(entry.item.es);
+        if (k === 'p' || k === 'P') return practise();
       }
     }
 
@@ -3094,6 +3126,7 @@ window.MT = window.MT || {};
         return;
       }
       if ((k === 'c' || k === 'C') && turn.who === 'you' && !session.revealed) { takeClue(turn); return; }
+      if ((k === 'p' || k === 'P') && turn.who === 'you' && session.revealed) { practise(); return; }
       if (k === 'r' || k === 'R') MT.speech.speak(turn.es);
     }
   });
