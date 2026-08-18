@@ -66,6 +66,16 @@ questions. Keeping them apart is intentional.
 
 Open `index.html` in a browser. That is the whole install.
 
+For a single-file copy — one 134 KB HTML file with everything inlined, nothing
+external, suitable for hosting or emailing to someone:
+
+```
+node build.js          # writes dist/spanish-out-loud.html
+```
+
+The bundle deliberately carries no `<html>`/`<body>` wrapper, so it works both
+as a hosted page and when opened straight off disk.
+
 If your browser is strict about local files, serve the directory:
 
 ```
@@ -114,6 +124,7 @@ counts.
 
 ```
 index.html            page shell and script order
+build.js              inlines everything into dist/ as one file
 data/curriculum.js    the course: blocks, drill items, conversations
 data/reference.js     the shelf: sayings, vocabulary, grammar contrasts
 js/engine.js          answer checking, Leitner scheduling, session building

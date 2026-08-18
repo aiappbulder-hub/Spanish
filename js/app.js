@@ -74,6 +74,11 @@
       }, [nextLessonLabel()])
     ]);
 
+    // Probe once, so a page that cannot persist says so rather than quietly
+    // losing the learner's work.
+    MT.store.touchStreak(); MT.store.save();
+    var noSave = !MT.store.canSave() ? el('p', { class: 'warn', text: 'This page cannot save to browser storage here, so progress will not survive a reload. Everything else works.' }) : null;
+
     var list = el('ol', { class: 'lessons' }, course.map(function (lesson, i) {
       return lessonCard(lesson, i);
     }));
@@ -87,7 +92,7 @@
     ]);
 
     var main = el('main', { class: 'wrap' }, [
-      header, stats, actions,
+      header, noSave, stats, actions,
       el('h2', { class: 'section', text: 'The course' }),
       list,
       shelf,

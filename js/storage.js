@@ -38,8 +38,15 @@ window.MT = window.MT || {};
     }
   }
 
+  var writable = true;
+
   function write(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* private mode */ }
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      // Private browsing, or a sandboxed frame with storage switched off.
+      writable = false;
+    }
   }
 
   var state = read(KEY, defaults);
@@ -48,6 +55,9 @@ window.MT = window.MT || {};
   MT.store = {
     state: state,
     settings: settings,
+
+    // False once a write has actually failed, so the app can be honest about it.
+    canSave: function () { return writable; },
 
     save: function () { write(KEY, state); },
     saveSettings: function () { write(SETTINGS_KEY, settings); },
