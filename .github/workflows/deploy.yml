@@ -27,16 +27,8 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build the single-file bundle
+      - name: Build the site
         run: node build.js
-
-      - name: Assemble the site
-        run: |
-          mkdir -p _site
-          cp index.html _site/
-          cp -r css js data _site/
-          cp dist/spanish-out-loud.html _site/
-          touch _site/.nojekyll
 
       - name: Check the build produced something usable
         run: |
@@ -45,6 +37,11 @@ jobs:
           test -s _site/data/curriculum.js
           test -s _site/data/reference.js
           grep -q 'id="app"' _site/index.html
+          # Stale assets are how a successful deploy still looks unchanged in a
+          # browser that has been here before, so treat an unstamped
+          # reference as a build failure rather than a cosmetic detail.
+          grep -q 'js/app.js?v=' _site/index.html
+          grep -q 'css/styles.css?v=' _site/index.html
           echo "site assembled:"
           find _site -type f | sort
 

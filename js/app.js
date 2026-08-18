@@ -74,10 +74,7 @@
       }, [nextLessonLabel()])
     ]);
 
-    // Probe once, so a page that cannot persist says so rather than quietly
-    // losing the learner's work.
-    MT.store.touchStreak(); MT.store.save();
-    var noSave = !MT.store.canSave() ? el('p', { class: 'warn', text: 'This page cannot save to browser storage here, so progress will not survive a reload. Everything else works.' }) : null;
+    var noSave = storageWarning();
 
     var list = el('ol', { class: 'lessons' }, course.map(function (lesson, i) {
       return lessonCard(lesson, i);
@@ -220,7 +217,8 @@
             if (confirm('Erase all progress and start the course again?')) { MT.store.reset(); render(); }
           }
         }, ['Reset all progress'])
-      ])
+      ]),
+      el('p', { class: 'muted', text: 'Version ' + (window.MT_BUILD || 'dev') + '. If the app looks out of date, reload the page — a browser will sometimes hold on to an older copy.' })
     ]);
   }
 
@@ -630,10 +628,22 @@
 
   /* ---------- first run ---------- */
 
+  /* Probe storage, and say so if it cannot hold anything. This has to be
+     available on the welcome screen as well as the course map, because a
+     learner whose storage is blocked never gets past the welcome. */
+  function storageWarning() {
+    MT.store.touchStreak();
+    MT.store.save();
+    if (MT.store.canSave()) return null;
+    return el('p', { class: 'warn', text: 'This browser is not letting the page save anything, so your progress will not survive a reload — private browsing usually causes this. Everything else works.' });
+  }
+
+
   function renderWelcome() {
     var main = el('main', { class: 'wrap narrow welcome' }, [
       el('p', { class: 'eyebrow', text: 'Spanish · the Michel Thomas way' }),
       el('h1', { text: 'You will be speaking in about two minutes.' }),
+      storageWarning(),
       el('p', { class: 'lede', text: 'No writing. No memorising. No homework. You will be given one small piece at a time and asked to build with it, and you will get things right almost immediately — that is by design, not luck.' }),
 
       el('ul', { class: 'promises' }, [
@@ -932,8 +942,9 @@
     if (view.name === 'welcome') return renderWelcome();
     if (view.name === 'intro') return renderIntro();
     if (view.name === 'home') {
-      // Never open on a wall of eight lessons. A newcomer gets one door.
-      if (!MT.store.state.onboarded && !MT.store.state.totals.answered) return renderWelcome();
+      // Never open on a wall of eight lessons. A newcomer gets one door, and
+      // so does anyone who has not yet been shown the intro — they can skip.
+      if (!MT.store.state.onboarded) return renderWelcome();
       return renderHome();
     }
     if (view.name === 'reference') return renderReference();
