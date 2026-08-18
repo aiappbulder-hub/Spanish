@@ -78,10 +78,19 @@
       return lessonCard(lesson, i);
     }));
 
+    // The shelf is deliberately outside the course: look things up here, but
+    // do not mistake reading a list for learning.
+    var shelf = el('button', { class: 'shelf', onclick: function () { go({ name: 'reference', tab: 'sayings', q: '' }); } }, [
+      el('h3', { text: 'The reference shelf' }),
+      el('p', { text: 'Sayings people actually use, a working vocabulary, and the points where Spanish and English genuinely disagree. Nothing here is drilled or scheduled — it is for looking things up.' }),
+      el('span', { class: 'shelf-counts', text: countSayings() + ' sayings · ' + countWords() + ' words · ' + countContrasts() + ' grammar contrasts' })
+    ]);
+
     var main = el('main', { class: 'wrap' }, [
       header, stats, actions,
       el('h2', { class: 'section', text: 'The course' }),
       list,
+      shelf,
       renderSettings()
     ]);
 
@@ -608,6 +617,134 @@
     })();
   }
 
+  /* ---------- reference shelf ---------- */
+
+  function countSayings() { return MT.sayings.reduce(function (n, g) { return n + g.items.length; }, 0); }
+  function countWords() { return MT.vocabulary.reduce(function (n, g) { return n + g.items.length; }, 0); }
+  function countContrasts() { return MT.contrasts.reduce(function (n, g) { return n + g.items.length; }, 0); }
+
+  var TABS = [
+    { id: 'sayings',   label: 'Sayings',           blurb: 'What people actually say. The literal reading is given wherever it is the reason the phrase sticks.' },
+    { id: 'words',     label: 'Words',             blurb: 'Nouns carry their article, because the article is the gender — learning a noun without it means learning it twice.' },
+    { id: 'contrasts', label: 'Spanish vs English', blurb: 'Not a grammar course: only the points where an English instinct produces wrong Spanish. That is a much shorter list.' }
+  ];
+
+  function renderReference() {
+    var tab = view.tab || 'sayings';
+    var meta = TABS.filter(function (t) { return t.id === tab; })[0];
+    var results = el('div', { class: 'ref-results' });
+
+    var search = el('input', {
+      class: 'input', type: 'search', placeholder: 'Search English or Spanish…',
+      value: view.q || '', autocomplete: 'off', spellcheck: 'false',
+      oninput: function (e) { view.q = e.target.value; fillResults(results, tab, view.q); }
+    });
+
+    var tabs = el('div', { class: 'tabs' }, TABS.map(function (t) {
+      return el('button', {
+        class: 'tab' + (t.id === tab ? ' tab-on' : ''),
+        onclick: function () { go({ name: 'reference', tab: t.id, q: view.q || '' }); }
+      }, [t.label]);
+    }));
+
+    var main = el('main', { class: 'wrap' }, [
+      backBar('Reference'),
+      el('h1', { class: 'screen-title', text: 'The reference shelf' }),
+      el('p', { class: 'lede', text: meta.blurb }),
+      tabs,
+      el('div', { class: 'ref-search' }, [search]),
+      results
+    ]);
+
+    clear(app);
+    app.appendChild(main);
+    fillResults(results, tab, view.q || '');
+  }
+
+  function matches(q, fields) {
+    if (!q) return true;
+    var needle = MT.engine.normalize(q);
+    if (!needle) return true;
+    return fields.some(function (f) {
+      return f && MT.engine.normalize(String(f)).indexOf(needle) !== -1;
+    });
+  }
+
+  // Only the results are rebuilt as you type, so the search box keeps focus.
+  function fillResults(container, tab, q) {
+    clear(container);
+    var groups = tab === 'sayings' ? MT.sayings : tab === 'words' ? MT.vocabulary : MT.contrasts;
+    var shown = 0;
+
+    groups.forEach(function (group) {
+      var items = group.items.filter(function (i) {
+        return tab === 'contrasts'
+          ? matches(q, [i.title, i.english, i.spanish, i.why].concat((i.examples || []).map(function (e) { return e.es + ' ' + e.en; })))
+          : matches(q, [i.es, i.en, i.lit, i.note]);
+      });
+      if (!items.length) return;
+      shown += items.length;
+
+      container.appendChild(el('div', { class: 'ref-group' }, [
+        el('h2', { class: 'ref-group-title', text: group.group }),
+        group.note ? el('p', { class: 'ref-group-note', text: group.note }) : null,
+        el('div', { class: tab === 'contrasts' ? 'contrast-list' : 'ref-list' },
+          items.map(tab === 'contrasts' ? contrastCard : refRow))
+      ]));
+    });
+
+    if (!shown) {
+      container.appendChild(el('p', { class: 'coach', text: 'Nothing matches “' + q + '” here. Try the other tabs — the same word may live under sayings rather than vocabulary.' }));
+    }
+  }
+
+  function refRow(item) {
+    return el('div', { class: 'ref-item' }, [
+      el('button', {
+        class: 'btn btn-play', title: 'Hear it',
+        onclick: function () { MT.speech.speak(item.es); }
+      }, ['♪']),
+      el('div', { class: 'ref-body' }, [
+        el('p', { class: 'ref-es', text: item.es }),
+        el('p', { class: 'ref-en', text: item.en }),
+        item.lit ? el('p', { class: 'ref-lit', text: 'Literally: ' + item.lit }) : null,
+        item.note ? el('p', { class: 'ref-note', text: item.note }) : null
+      ])
+    ]);
+  }
+
+  function contrastCard(item) {
+    return el('article', { class: 'contrast' }, [
+      el('h3', { class: 'contrast-title', text: item.title }),
+      el('div', { class: 'contrast-pair' }, [
+        el('div', { class: 'contrast-side' }, [
+          el('span', { class: 'contrast-lang', text: 'English' }),
+          el('p', { text: item.english })
+        ]),
+        el('div', { class: 'contrast-side contrast-es' }, [
+          el('span', { class: 'contrast-lang', text: 'Spanish' }),
+          el('p', { text: item.spanish })
+        ])
+      ]),
+      item.why ? el('p', { class: 'contrast-why', text: item.why }) : null,
+      (item.examples || []).length ? el('div', { class: 'contrast-examples' },
+        item.examples.map(function (ex) {
+          return el('div', { class: 'ref-item' }, [
+            el('button', {
+              class: 'btn btn-play', title: 'Hear it',
+              onclick: function () { MT.speech.speak(ex.es); }
+            }, ['♪']),
+            el('div', { class: 'ref-body' }, [
+              el('p', { class: 'ref-es', text: ex.es }),
+              el('p', { class: 'ref-en', text: ex.en }),
+              ex.note ? el('p', { class: 'ref-note', text: ex.note }) : null
+            ])
+          ]);
+        })
+      ) : null
+    ]);
+  }
+
   /* ---------- keyboard ---------- */
 
   document.addEventListener('keydown', function (e) {
@@ -647,6 +784,7 @@
 
   function render() {
     if (view.name === 'home') return renderHome();
+    if (view.name === 'reference') return renderReference();
     if (view.name === 'blocks') return renderBlocks();
     if (view.name === 'drill') return renderDrill();
     if (view.name === 'conversation') return renderConversation();

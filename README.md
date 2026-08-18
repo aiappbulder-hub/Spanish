@@ -36,6 +36,32 @@ to slow down, saying you did not understand, buying yourself a second with
 *bueno...*, and asking what a word means. That is the skill that decides whether
 you actually speak to anyone.
 
+## The reference shelf
+
+Separate from the course, reachable from the home screen, and deliberately not
+drilled or scheduled:
+
+- **Sayings** — 100 expressions people actually use, from `¿Qué tal?` and
+  `Es que...` through idioms (`costar un ojo de la cara`) to proverbs
+  (`Del dicho al hecho hay mucho trecho`). Literal readings are given wherever
+  they are the reason the phrase sticks.
+- **Words** — 256 entries in themed groups: the 40 verbs that do most of the
+  work, people, time, numbers, food, travel, describing things, and the small
+  connecting words that turn phrases into speech. Nouns carry their article,
+  because the article *is* the gender.
+- **Spanish vs English** — 24 points where an English instinct produces wrong
+  Spanish, with 71 worked examples. Not a grammar course: gender agreement,
+  ser/estar, `gustar` running backwards, the compulsory double negative, the
+  personal *a*, por/para, saber/conocer, and the stress rules that make Spanish
+  spelling predictable.
+
+Everything on the shelf has a play button, and search matches either language
+with accents optional.
+
+A note on why it is fenced off: Michel Thomas would not have handed you a word
+list, and reading one is not learning. The course teaches; the shelf answers
+questions. Keeping them apart is intentional.
+
 ## Running it
 
 Open `index.html` in a browser. That is the whole install.
@@ -89,6 +115,7 @@ counts.
 ```
 index.html            page shell and script order
 data/curriculum.js    the course: blocks, drill items, conversations
+data/reference.js     the shelf: sayings, vocabulary, grammar contrasts
 js/engine.js          answer checking, Leitner scheduling, session building
 js/speech.js          text-to-speech and optional speech recognition
 js/storage.js         progress in localStorage
