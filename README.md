@@ -72,8 +72,12 @@ For a single-file copy — one 134 KB HTML file with everything inlined, nothing
 external, suitable for hosting or emailing to someone:
 
 ```
-node build.js          # writes dist/spanish-out-loud.html
+node build.js          # writes dist/spanish-out-loud.html and _site/
 ```
+
+Both outputs are build artifacts and are not committed — the deploy regenerates
+them, and a committed copy would be permanently one commit out of date, since
+the build stamps itself with the commit it was built from.
 
 The bundle deliberately carries no `<html>`/`<body>` wrapper, so it works both
 as a hosted page and when opened straight off disk.
@@ -141,7 +145,7 @@ The published site serves both forms:
 
 ```
 index.html            page shell and script order
-build.js              inlines everything into dist/ as one file
+build.js              assembles _site/ and the single-file bundle (both untracked)
 data/curriculum.js    the course: blocks, drill items, conversations
 data/reference.js     the shelf: sayings, vocabulary, grammar contrasts
 js/engine.js          answer checking, Leitner scheduling, session building
