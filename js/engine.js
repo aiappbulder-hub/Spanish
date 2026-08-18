@@ -60,6 +60,23 @@ window.MT = window.MT || {};
     return Math.max(0, (matched - lenPenalty) / Math.max(aw.length, bw.length));
   }
 
+  /* Clues, for having another go without being handed the answer.
+     Masked letters keep word count and word length visible, which is a real
+     hint in Spanish — "es posible" and "no es posible" do not look alike. */
+  function mask(es, revealed) {
+    return es.split(' ').map(function (word, i) {
+      if (i < revealed) return word;
+      return word.replace(/\S/g, function (ch) {
+        return /[¿¡?!.,;:"'()]/.test(ch) ? ch : '·';
+      });
+    }).join(' ');
+  }
+
+  // The last word is never given away by a clue; that is what the answer is for.
+  function clueCount(es) {
+    return Math.max(1, es.split(' ').length - 1);
+  }
+
   function due(record, now) {
     if (!record) return true;
     return record.due <= now;
@@ -176,6 +193,8 @@ window.MT = window.MT || {};
 
   MT.engine = {
     key: key,
+    mask: mask,
+    clueCount: clueCount,
     normalize: normalize,
     check: check,
     schedule: schedule,

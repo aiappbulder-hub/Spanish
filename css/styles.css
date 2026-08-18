@@ -387,3 +387,14 @@ p { margin: 0 0 1rem; }
 }
 .linkish:hover { text-decoration-thickness: 2px; }
 .linkish:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- clues and retries ---- */
+.clue-card { border-style: dashed; border-color: var(--ink-soft); background: transparent; }
+.clue {
+  margin: 0; font-size: clamp(1.3rem, 4vw, 1.75rem); line-height: 1.4;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: .02em; color: var(--ink); word-spacing: .5em;
+}
+.retry { margin: .8rem 0 0; color: var(--mid); font-size: .95rem; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn[disabled]:hover { border-color: var(--line); color: var(--ink); background: var(--bg-raised); }

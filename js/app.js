@@ -282,14 +282,14 @@
 
   function startLesson(lesson) {
     var queue = MT.engine.buildLessonQueue(lesson, course, { maxReview: 8 });
-    session = { queue: queue, pos: 0, revealed: false, title: lesson.title, kind: 'lesson', heard: '', verdict: null, right: 0, listening: false };
+    session = { queue: queue, pos: 0, revealed: false, title: lesson.title, kind: 'lesson', heard: '', verdict: null, right: 0, listening: false, clues: -1, attempts: 0, lastTry: '', typedValue: '' };
     go({ name: 'drill', lessonId: lesson.id });
   }
 
   function startReview() {
     var queue = MT.engine.buildReviewQueue(course, 30);
     if (!queue.length) return;
-    session = { queue: queue, pos: 0, revealed: false, title: 'Review', kind: 'review', heard: '', verdict: null, right: 0, listening: false };
+    session = { queue: queue, pos: 0, revealed: false, title: 'Review', kind: 'review', heard: '', verdict: null, right: 0, listening: false, clues: -1, attempts: 0, lastTry: '', typedValue: '' };
     go({ name: 'drill' });
   }
 
@@ -314,35 +314,40 @@
     var body = [promptCard];
 
     if (!session.revealed) {
-      body.push(el('p', { class: 'coach', text: 'Take as long as you like. Work it out, say it out loud, and only then look.' }));
+      body.push(el('p', {
+        class: 'coach',
+        text: session.attempts
+          ? 'Have another go. You can take a clue instead of the whole answer.'
+          : 'Take as long as you like. Work it out, say it out loud, and only then look.'
+      }));
+
+      body.push(clueCard(item));
 
       if (MT.store.settings.typed) {
         var input = el('input', {
           class: 'input input-answer', type: 'text', placeholder: 'Type it here (accents optional)',
           autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false',
-          value: session.heard || '',
+          value: session.typedValue || '',
           onkeydown: function (e) {
-            if (e.key === 'Enter') { session.heard = e.target.value; reveal(entry); }
+            if (e.key === 'Enter') attempt(entry, e.target.value);
           }
         });
         body.push(input);
-        setTimeout(function () { input.focus(); }, 0);
+        setTimeout(function () { input.focus(); input.select(); }, 0);
       }
 
-      var controls = [
-        el('button', { class: 'btn btn-primary', onclick: function () { reveal(entry); } }, ['Show me (space)'])
-      ];
+      var controls = [];
       if (MT.speech.recognitionSupported) {
         controls.push(el('button', {
           class: 'btn' + (session.listening ? ' btn-live' : ''),
           onclick: function () { toggleListen(entry); }
         }, [session.listening ? '● Listening…' : '● Say it']));
       }
+      controls.push(clueButton(item));
+      controls.push(el('button', { class: 'btn btn-primary', onclick: function () { reveal(entry); } }, ['Show me (space)']));
       body.push(el('div', { class: 'row' }, controls));
 
-      if (session.heard && !MT.store.settings.typed) {
-        body.push(el('p', { class: 'heard', text: 'Heard: “' + session.heard + '”' }));
-      }
+      body.push(tryAgainNote());
     } else {
       var verdict = session.verdict;
       body.push(el('div', { class: 'card answer-card' }, [
@@ -361,7 +366,13 @@
         }) : null
       ]));
 
-      body.push(el('p', { class: 'coach', text: 'Be honest with yourself here. Nothing is lost by marking it missed — it simply comes back.' }));
+      var helped = (session.attempts || 0) > 0 || (session.clues != null && session.clues >= 0);
+      body.push(el('p', {
+        class: 'coach',
+        text: helped
+          ? 'You worked for that one. Grade it on whether you could produce it unaided next time — clues now are not cheating, but they do mean it is worth seeing again.'
+          : 'Be honest with yourself here. Nothing is lost by marking it missed — it simply comes back.'
+      }));
       body.push(el('div', { class: 'row' }, [
         el('button', { class: 'btn btn-good', onclick: function () { grade(entry, 'right'); } }, ['Got it  (1)']),
         el('button', { class: 'btn btn-mid', onclick: function () { grade(entry, 'close'); } }, ['Nearly  (2)']),
@@ -378,6 +389,58 @@
     app.appendChild(main);
   }
 
+  /* Clues and attempts are the same idea in the drill and in a conversation,
+     so both screens share these. session.clues is -1 before any clue, then 0
+     for the shape of the answer, then one more word each time. */
+  function clueCard(item) {
+    if (session.clues == null || session.clues < 0) return null;
+    var max = MT.engine.clueCount(item.es);
+    return el('div', { class: 'card clue-card' }, [
+      el('p', { class: 'label', text: 'Clue ' + (session.clues + 1) + ' of ' + (max + 1) }),
+      el('p', { class: 'clue', text: MT.engine.mask(item.es, session.clues) })
+    ]);
+  }
+
+  function clueButton(item) {
+    var max = MT.engine.clueCount(item.es);
+    var exhausted = session.clues != null && session.clues >= max;
+    return el('button', {
+      class: 'btn', disabled: exhausted || null,
+      onclick: function () { takeClue(item); }
+    }, [exhausted ? 'No more clues' : (session.clues == null || session.clues < 0) ? 'Give me a clue (c)' : 'Another clue (c)']);
+  }
+
+  function takeClue(item) {
+    var max = MT.engine.clueCount(item.es);
+    if (session.clues == null || session.clues < 0) session.clues = 0;
+    else if (session.clues < max) session.clues += 1;
+    render();
+  }
+
+  function tryAgainNote() {
+    if (!session.attempts) return null;
+    var heard = session.lastTry ? ' You said: “' + session.lastTry + '”.' : '';
+    return el('p', {
+      class: 'retry',
+      text: 'Not quite yet — that was go ' + session.attempts + '.' + heard + ' Try again, take a clue, or show the answer.'
+    });
+  }
+
+  /* An attempt that misses no longer gives the game away: it says so and lets
+     the learner go again. Only a correct-enough answer opens the reveal. */
+  function attempt(entry, value) {
+    session.typedValue = value;
+    session.lastTry = value;
+    var verdict = MT.engine.check(entry.item, value);
+    if (verdict === 'right' || verdict === 'close') {
+      session.heard = value;
+      reveal(entry);
+    } else {
+      session.attempts = (session.attempts || 0) + 1;
+      render();
+    }
+  }
+
   function toggleListen(entry) {
     if (session.listening) {
       MT.speech.stopListening();
@@ -391,7 +454,7 @@
       session.heard = transcript;
       if (isFinal) {
         session.listening = false;
-        reveal(entry);
+        attempt(entry, transcript);
       } else {
         render();
       }
@@ -427,6 +490,10 @@
     session.revealed = false;
     session.heard = '';
     session.verdict = null;
+    session.clues = -1;
+    session.attempts = 0;
+    session.lastTry = '';
+    session.typedValue = '';
     render();
   }
 
@@ -462,7 +529,7 @@
     var conv = lesson.conversations.filter(function (c) { return c.id === view.convId; })[0];
 
     if (!session || session.kind !== 'conv' || session.convId !== conv.id) {
-      session = { kind: 'conv', convId: conv.id, pos: 0, revealed: false, heard: '', verdict: null, listening: false };
+      session = { kind: 'conv', convId: conv.id, pos: 0, revealed: false, heard: '', verdict: null, listening: false, clues: -1, attempts: 0, lastTry: '', typedValue: '' };
       // The other person opens if theirs is the first turn.
       if (conv.turns[0].who === 'them') setTimeout(function () { MT.speech.speak(conv.turns[0].es); }, 250);
     }
@@ -516,7 +583,7 @@
         node.appendChild(el('div', { class: 'row row-tight' }, [
           el('button', {
             class: 'btn btn-primary btn-small',
-            onclick: function () { session.pos += 1; render(); autoSpeakCurrent(conv); }
+            onclick: function () { nextTurn(conv); }
           }, ['Continue (space)'])
         ]));
       }
@@ -527,26 +594,29 @@
     var children = [el('p', { class: 'turn-cue', text: turn.cue })];
 
     if (isCurrent && !session.revealed) {
+      children.push(clueCard(turn));
+
       if (MT.store.settings.typed) {
         var input = el('input', {
           class: 'input input-answer', type: 'text', placeholder: 'Your answer',
           autocomplete: 'off', spellcheck: 'false',
-          onkeydown: function (e) { if (e.key === 'Enter') { session.heard = e.target.value; revealTurn(turn); } }
+          value: session.typedValue || '',
+          onkeydown: function (e) { if (e.key === 'Enter') attemptTurn(turn, e.target.value); }
         });
         children.push(input);
-        setTimeout(function () { input.focus(); }, 0);
+        setTimeout(function () { input.focus(); input.select(); }, 0);
       }
-      var controls = [
-        el('button', { class: 'btn btn-primary btn-small', onclick: function () { revealTurn(turn); } }, ['Show me (space)'])
-      ];
+      var controls = [];
       if (MT.speech.recognitionSupported) {
         controls.push(el('button', {
           class: 'btn btn-small' + (session.listening ? ' btn-live' : ''),
           onclick: function () { toggleListenTurn(turn); }
         }, [session.listening ? '● Listening…' : '● Say it']));
       }
+      controls.push(clueButton(turn));
+      controls.push(el('button', { class: 'btn btn-primary btn-small', onclick: function () { revealTurn(turn); } }, ['Show me (space)']));
       children.push(el('div', { class: 'row row-tight' }, controls));
-      if (session.heard) children.push(el('p', { class: 'heard', text: 'Heard: “' + session.heard + '”' }));
+      children.push(tryAgainNote());
     } else if (index < session.pos || session.revealed) {
       children.push(el('p', { class: 'turn-es', text: turn.es }));
       if (turn.note) children.push(el('p', { class: 'note', text: turn.note }));
@@ -581,6 +651,19 @@
     render();
   }
 
+  function attemptTurn(turn, value) {
+    session.typedValue = value;
+    session.lastTry = value;
+    var verdict = MT.engine.check(turn, value);
+    if (verdict === 'right' || verdict === 'close') {
+      session.heard = value;
+      revealTurn(turn);
+    } else {
+      session.attempts = (session.attempts || 0) + 1;
+      render();
+    }
+  }
+
   function toggleListenTurn(turn) {
     if (session.listening) {
       MT.speech.stopListening();
@@ -592,7 +675,7 @@
     render();
     MT.speech.listen(function (transcript, isFinal) {
       session.heard = transcript;
-      if (isFinal) { session.listening = false; revealTurn(turn); }
+      if (isFinal) { session.listening = false; attemptTurn(turn, transcript); }
       else render();
     }, function (err) {
       session.listening = false;
@@ -606,6 +689,10 @@
     session.revealed = false;
     session.heard = '';
     session.verdict = null;
+    session.clues = -1;
+    session.attempts = 0;
+    session.lastTry = '';
+    session.typedValue = '';
     render();
     autoSpeakCurrent(conv);
   }
@@ -913,6 +1000,7 @@
       var entry = session.queue[session.pos];
       if (!entry) return;
       if (k === ' ') { e.preventDefault(); if (!session.revealed) reveal(entry); return; }
+      if ((k === 'c' || k === 'C') && !session.revealed) { takeClue(entry.item); return; }
       if (session.revealed) {
         if (k === '1') return grade(entry, 'right');
         if (k === '2') return grade(entry, 'close');
@@ -927,11 +1015,12 @@
       if (!turn) return;
       if (k === ' ') {
         e.preventDefault();
-        if (turn.who === 'them') { session.pos += 1; render(); autoSpeakCurrent(conv); }
+        if (turn.who === 'them') nextTurn(conv);
         else if (!session.revealed) revealTurn(turn);
         else nextTurn(conv);
         return;
       }
+      if ((k === 'c' || k === 'C') && turn.who === 'you' && !session.revealed) { takeClue(turn); return; }
       if (k === 'r' || k === 'R') MT.speech.speak(turn.es);
     }
   });
