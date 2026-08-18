@@ -1,5 +1,7 @@
 # Spanish — the Michel Thomas way
 
+**Live: https://aiappbulder-hub.github.io/Spanish/**
+
 A speaking-first Spanish course that runs in the browser. No accounts, no build
 step, no network. Open `index.html` and start talking.
 
@@ -119,6 +121,21 @@ The percentage on each lesson is *strength*, not coverage: one clean pass
 through an item is worth a third of it. Reaching 100% means recalling the
 material correctly on separate days, which is the only kind of knowing that
 counts.
+
+## Deployment
+
+Pushing to `claude/spanish-michel-thomas-app-eg0drl` (this repo's default
+branch) runs `.github/workflows/deploy.yml`, which rebuilds the bundle,
+assembles the site, asserts the output is intact, and publishes to GitHub
+Pages. There is no manual step — the workflow enables Pages itself on first
+run.
+
+The published site serves both forms:
+
+| Path | What it is |
+| --- | --- |
+| `/` | the multi-file app |
+| `/spanish-out-loud.html` | the single-file bundle, for saving or passing on |
 
 ## Layout
 
